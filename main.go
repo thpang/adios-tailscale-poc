@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	awsec2 "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	awsxec2 "github.com/pulumi/pulumi-awsx/sdk/v2/go/awsx/ec2"
@@ -9,13 +10,14 @@ import (
 )
 
 // Variables
-var prefix = "tailscale-poc"             // os.Getenv("PREFIX")
-var vpc_count = 2                        // os.Getenv("VPC_COUNT")
-var vpc_az_count = 2                     // os.Getenv("VPC_AZ_COUNT")
-var vpc_subnet_cidr_mask = 28            // os.Getenv("VPC_SUBNET_CIDR_MASK")
-var ec2_keypair_name = "adios-tailscale" // os.Getenv("EC2_KEYPAIR_NAME")
-var ec2_vpc_count = 2                    // os.Getenv("EC2_VPC_COUNT")
-var sg_vpn_cidr = ""                     // os.Getenv("SG_VPN_CIDR")
+var prefix = "adios-tailscale-poc" // os.Getenv("PREFIX")
+var vpc_count = 2                  // os.Getenv("VPC_COUNT")
+var vpc_az_count = 2               // os.Getenv("VPC_AZ_COUNT")
+var vpc_cidr_mask = 24             // os.Getenv("VPC_CIDR_MASK")
+var vpc_subnet_cidr_mask = 28      // os.Getenv("VPC_SUBNET_CIDR_MASK")
+var ec2_keypair_name = prefix      // os.Getenv("EC2_KEYPAIR_NAME")
+var ec2_vpc_count = 2              // os.Getenv("EC2_VPC_COUNT")
+var sg_vpn_cidr = os.Getenv("SG_VPN_CIDR")
 
 // os.Getenv("AWS_REGION")
 // TODO: Look at Viper for configuration management - https://github.com/spf13/viper
@@ -65,7 +67,7 @@ func main() {
 		// Create vpc_count number of VPCs
 		for count := range vpc_count {
 			var vpc_name = fmt.Sprintf("%s-vpc-%02d", prefix, count)
-			var vpc_cidr = fmt.Sprintf("10.0.%d.0/24", count)
+			var vpc_cidr = fmt.Sprintf("10.0.%d.0/%d", count, vpc_cidr_mask)
 			vpc, err := awsxec2.NewVpc(ctx, vpc_name, &awsxec2.VpcArgs{
 				Tags: pulumi.StringMap{
 					"Name": pulumi.String(vpc_name),
@@ -152,7 +154,7 @@ func main() {
 		// Return vpc and sg ids
 		ctx.Export("vpc_ids", vpc_ids)
 		ctx.Export("sg_ids", sg_ids)
-		ctx.Export("vm_host_names", vm_host_names)
+		ctx.Export("vm_ip_addresses", vm_host_names)
 		ctx.Export("keypair_name", pulumi.String(*keyPair.KeyName))
 		ctx.Export("keypair_fingerprint", pulumi.String(keyPair.Fingerprint))
 
