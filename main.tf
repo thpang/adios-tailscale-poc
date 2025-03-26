@@ -75,7 +75,7 @@ module "eks" {
   eks_managed_node_groups = {
     system = {
       instance_types = ["m5.xlarge"]
-      name            = format("eks-%02d-system-ng", count.index)
+      name           = format("eks-%02d-system-ng", count.index)
 
       min_size     = 1
       max_size     = 2
@@ -83,7 +83,7 @@ module "eks" {
     }
     default = {
       instance_types = ["m5.xlarge"]
-      name            = format("eks-%02d-default-ng", count.index)
+      name           = format("eks-%02d-default-ng", count.index)
 
       min_size     = 2
       max_size     = 4
