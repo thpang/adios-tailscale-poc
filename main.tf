@@ -39,17 +39,27 @@ module "vpc" {
   }
 }
 
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+  }
+
+}
+
 module "vm" {
-  count = var.vpc_count
-  source = "terraform-aws-modules/ec2-instance/aws"
+  count   = var.vpc_count
+  source  = "terraform-aws-modules/ec2-instance/aws"
   version = "3.0.0"
 
-  name = format("%s-vm-%02d", var.prefix, count.index)
-  ami = "ami-04f167a56786e4b09" # Ubuntu 24.04 - Username: ubuntu
-  instance_type = "m5.xlarge"
-  subnet_id = module.vpc[count.index].public_subnets[0]
+  name                        = format("%s-vm-%02d", var.prefix, count.index)
+  ami                         = data.aws_ami.ubuntu.id # "ami-04f167a56786e4b09" # Ubuntu 24.04 - Username: ubuntu
+  instance_type               = "m5.xlarge"
+  subnet_id                   = module.vpc[count.index].public_subnets[0]
   associate_public_ip_address = true
-  key_name = var.prefix
+  key_name                    = var.prefix
 }
 
 module "eks" {
