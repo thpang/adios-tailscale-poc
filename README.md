@@ -1,13 +1,4 @@
-# adios-tailscale-poc
+# Learn Terraform - Provision an EKS Cluster
 
-## Configure your profile
-
-### AWS
-
-Information and links for AWS
-
-* [Configure your profile with the aws configure sso wizard](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html#sso-configure-profile-token-auto-sso)
-
-### Azure
-
-### GCP
+This repo is a companion repo to the [Provision an EKS Cluster tutorial](https://developer.hashicorp.com/terraform/tutorials/kubernetes/eks), containing
+Terraform configuration files to provision an EKS cluster on AWS.

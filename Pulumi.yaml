@@ -1,7 +1,0 @@
-name: tailscale
-description: Pulumi Go code that will stand up IAC for our Tailscale POC
-runtime: go
-config:
-  pulumi:tags:
-    value:
-      pulumi:template: aws-go
