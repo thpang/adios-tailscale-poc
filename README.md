@@ -13,6 +13,7 @@ It has been modified by the SAS Adios team to work with their Tailscale POC
 
 # First initialize your SSO for AWS. Run the following command and setup your project
 aws configure sso --profile adios-tailscale-poc
+export AWS_PROFILE=adios-tailscale-poc
 tofu init
 tofu apply
 ```
