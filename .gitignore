@@ -23,3 +23,6 @@ terraform.rc
 
 # Ignore kubeconfig file
 *-kubeconfig-*.conf
+
+# Tailscale items
+*.key

@@ -46,7 +46,6 @@ data "aws_ami" "ubuntu" {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
   }
-
 }
 
 module "vm" {
@@ -55,7 +54,7 @@ module "vm" {
   version = "3.0.0"
 
   name                        = format("%s-vm-%02d", var.prefix, count.index)
-  ami                         = data.aws_ami.ubuntu.id # "ami-04f167a56786e4b09" # Ubuntu 24.04 - Username: ubuntu
+  ami                         = data.aws_ami.ubuntu.id # OS: Ubuntu 20.04 - Username: ubuntu
   instance_type               = "m5.xlarge"
   subnet_id                   = module.vpc[count.index].public_subnets[0]
   associate_public_ip_address = true
@@ -73,44 +72,52 @@ module "eks" {
   cluster_endpoint_public_access           = true
   enable_cluster_creator_admin_permissions = true
 
-  # cluster_addons = {
-  #   aws-ebs-csi-driver = {
-  #     service_account_role_arn = module.irsa-ebs-csi[count].iam_role_arn
-  #   }
-  # }
   cluster_addons = {
-    coredns                = {}
-    eks-pod-identity-agent = {}
-    kube-proxy             = {}
-    vpc-cni                = {}
+    coredns = {
+      most_recent = true
+    }
+    kube-proxy = {
+      most_recent = true
+    }
+    vpc-cni = {
+      most_recent    = true
+      before_compute = true
+      configuration_values = jsonencode({
+        env = {
+          # Reference docs https://docs.aws.amazon.com/eks/latest/userguide/cni-increase-ip-addresses.html
+          ENABLE_PREFIX_DELEGATION = "true"
+          WARM_PREFIX_TARGET       = "1"
+        }
+      })
+    }
   }
 
   vpc_id     = module.vpc[count.index].vpc_id
   subnet_ids = module.vpc[count.index].private_subnets
 
+
   eks_managed_node_group_defaults = {
     # Starting on 1.30, AL2023 is the default AMI type for EKS managed node groups
     ami_type        = "AL2023_x86_64_STANDARD"
+    instance_types  = ["m5.xlarge"]
     use_name_prefix = false
   }
 
   # EKS Managed Node Group(s)
   eks_managed_node_groups = {
     system = {
-      instance_types = ["m5.xlarge"]
-      name           = format("eks-%02d-system-ng", count.index)
-
-      min_size     = 1
-      max_size     = 2
-      desired_size = 1
+      name                       = format("eks-%02d-system-ng", count.index)
+      use_custom_launch_template = false
+      min_size                   = 1
+      max_size                   = 2
+      desired_size               = 1
     }
     default = {
-      instance_types = ["m5.xlarge"]
-      name           = format("eks-%02d-default-ng", count.index)
-
-      min_size     = 2
-      max_size     = 4
-      desired_size = 2
+      name                           = format("eks-%02d-default-ng", count.index)
+      use_latest_ami_release_version = true
+      min_size                       = 2
+      max_size                       = 4
+      desired_size                   = 2
     }
   }
 
@@ -128,20 +135,3 @@ module "kubeconfig" {
 
   depends_on = [module.eks]
 }
-
-# https://aws.amazon.com/blogs/containers/amazon-ebs-csi-driver-is-now-generally-available-in-amazon-eks-add-ons/ 
-# data "aws_iam_policy" "ebs_csi_policy" {
-#   arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-# }
-
-# module "irsa-ebs-csi" {
-#   count = var.vpc_count
-#   source  = "terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc"
-#   version = "5.39.0"
-
-#   create_role                   = true
-#   role_name                     = "AmazonEKSTFEBSCSIRole-${module.eks[count.index].cluster_name}"
-#   provider_url                  = module.eks[count.index].oidc_provider
-#   role_policy_arns              = [data.aws_iam_policy.ebs_csi_policy.arn]
-#   oidc_fully_qualified_subjects = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]
-# }
