@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu-pod
+  labels:
+    app: ubuntu-app
+    version: v1
+spec:
+  containers:
+  - name: ubuntu-container
+    image: ubuntu:latest
+    command: ["/bin/bash", "-l"]  # Start a bash shell when the container starts
