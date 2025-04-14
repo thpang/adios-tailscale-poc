@@ -14,6 +14,12 @@ data "aws_availability_zones" "available" {
   }
 }
 
+locals {
+  tags = {
+    smart_parking_disabled = "True"
+  }
+}
+
 module "vpc" {
   count   = var.vpc_count
   source  = "terraform-aws-modules/vpc/aws"
@@ -37,6 +43,8 @@ module "vpc" {
   private_subnet_tags = {
     "kubernetes.io/role/internal-elb" = 1
   }
+
+  tags = local.tags
 }
 
 data "aws_ami" "ubuntu" {
@@ -59,12 +67,15 @@ module "vm" {
   subnet_id                   = module.vpc[count.index].public_subnets[0]
   associate_public_ip_address = true
   key_name                    = var.prefix
+
+  tags = local.tags
+
 }
 
 module "eks" {
   count   = var.vpc_count
   source  = "terraform-aws-modules/eks/aws"
-  version = "20.8.5"
+  version = "~> 20"
 
   cluster_name    = format("%s-eks-%02d", var.prefix, count.index)
   cluster_version = var.cluster_version
@@ -100,6 +111,32 @@ module "eks" {
     ami_type        = "AL2023_x86_64_STANDARD"
     instance_types  = ["m5.xlarge"]
     use_name_prefix = false
+    create_schedule = true
+    cloudinit_pre_nodeadm = [
+      {
+        content_type = "application/node.eks.aws"
+        content      = <<-EOT
+            ---
+            apiVersion: node.eks.aws/v1alpha1
+            kind: NodeConfig
+            spec:
+              instance:
+                localStorage:
+                  strategy: RAID0
+          EOT        
+      }
+    ]
+
+    tags = local.tags
+
+    lifecycle = {
+      ignore_changes = [
+        # Ignore changes to the node group tags
+        "tags",
+        # Ignore changes to the node group scaling config
+        "scaling_config",
+      ]
+    }
   }
 
   # EKS Managed Node Group(s)
@@ -110,6 +147,24 @@ module "eks" {
       min_size                   = 1
       max_size                   = 2
       desired_size               = 1
+      schedules = {
+        "start" = {
+          schedule_action_name = "start"
+          recurrence           = "0 7 * * 1-5" # CRON expression
+          time_zone            = "US/Eastern"
+          min_size             = 1
+          max_size             = 2
+          desired_size         = 1
+        }
+        "stop" = {
+          schedule_action_name = "stop"
+          recurrence           = "0 17 * * 1-5" # CRON expression
+          time_zone            = "US/Eastern"
+          min_size             = 0
+          max_size             = 0
+          desired_size         = 0
+        }
+      }
     }
     default = {
       name                           = format("eks-%02d-default-ng", count.index)
@@ -117,11 +172,55 @@ module "eks" {
       min_size                       = 2
       max_size                       = 4
       desired_size                   = 2
+      schedules = {
+        "start" = {
+          schedule_action_name = "start"
+          recurrence           = "0 7 * * 1-5"
+          time_zone            = "US/Eastern"
+          min_size             = 2
+          max_size             = 4
+          desired_size         = 2
+        }
+        "stop" = {
+          schedule_action_name = "stop"
+          recurrence           = "0 17 * * 1-5"
+          time_zone            = "US/Eastern"
+          min_size             = 0
+          max_size             = 0
+          desired_size         = 0
+        }
+      }
     }
   }
 
+  tags = local.tags
+
 }
 
+# Storage
+module "irsa-ebs-csi" {
+  count  = var.vpc_count
+  source = "./modules/aws_ebs_csi"
+
+  cluster_name = format("%s-eks-%02d", var.prefix, count.index)
+  tags         = local.tags
+  oidc_url     = module.eks[count.index].cluster_oidc_issuer_url
+
+  depends_on = [module.eks]
+}
+
+# resource "aws_eks_addon" "aws-ebs-csi-driver" {
+#   count                       = var.vpc_count
+#   cluster_name                = module.eks[count.index].cluster_name
+#   addon_name                  = "aws-ebs-csi-driver"
+#   resolve_conflicts_on_update = "OVERWRITE"
+#   service_account_role_arn    = module.irsa-ebs-csi[count.index].iam_assumable_role_with_oidc.iam_role_arn
+
+#   depends_on = [module.eks, module.irsa-ebs-csi]
+#   # depends_on = [module.eks]
+# }
+
+# Kubernetes
 module "kubeconfig" {
   count        = var.vpc_count
   source       = "./modules/kubeconfig"
