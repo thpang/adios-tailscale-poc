@@ -29,8 +29,9 @@ module "vpc" {
   cidr = format("10.%d.0.0/21", count.index)
   azs  = slice(data.aws_availability_zones.available.names, 0, var.vpc_zone_count)
 
-  private_subnets = [for i in range(var.vpc_zone_count) : format("10.%d.%d.0/24", count.index, i + 1)]
-  public_subnets  = [for i in range(var.vpc_zone_count) : format("10.%d.%d.0/24", count.index, i + var.vpc_zone_count + 1)]
+  private_subnets = flatten([for i in range(var.vpc_zone_count) : cidrsubnet(format("10.%d.0.0/21", count.index), 3, i + 1)])
+  public_subnets  = flatten([for i in range(var.vpc_zone_count) : cidrsubnet(format("10.%d.0.0/21", count.index), 3, i + 3)])
+  intra_subnets   = flatten([for i in range(var.vpc_zone_count) : cidrsubnet(format("10.%d.0.0/21", count.index), 3, i + 5)])
 
   enable_nat_gateway   = true
   single_nat_gateway   = true
@@ -166,7 +167,7 @@ module "eks" {
         }
       }
     }
-    default = {
+    generic = {
       name                           = format("eks-%02d-default-ng", count.index)
       use_latest_ami_release_version = true
       min_size                       = 2
@@ -198,9 +199,9 @@ module "eks" {
 }
 
 # Storage
-module "irsa-ebs-csi" {
+module "ebs_csi_driver" {
   count  = var.vpc_count
-  source = "./modules/aws_ebs_csi"
+  source = "./modules/ebs_csi_driver"
 
   cluster_name = format("%s-eks-%02d", var.prefix, count.index)
   tags         = local.tags
@@ -209,16 +210,14 @@ module "irsa-ebs-csi" {
   depends_on = [module.eks]
 }
 
-# resource "aws_eks_addon" "aws-ebs-csi-driver" {
-#   count                       = var.vpc_count
-#   cluster_name                = module.eks[count.index].cluster_name
-#   addon_name                  = "aws-ebs-csi-driver"
-#   resolve_conflicts_on_update = "OVERWRITE"
-#   service_account_role_arn    = module.irsa-ebs-csi[count.index].iam_assumable_role_with_oidc.iam_role_arn
+resource "aws_eks_addon" "aws-ebs-csi-driver" {
+  count                       = var.vpc_count
+  cluster_name                = module.eks[count.index].cluster_name
+  addon_name                  = "aws-ebs-csi-driver"
+  resolve_conflicts_on_update = "OVERWRITE"
+  service_account_role_arn    = module.ebs_csi_driver[count.index].ebs_csi_driver_role.arn
 
-#   depends_on = [module.eks, module.irsa-ebs-csi]
-#   # depends_on = [module.eks]
-# }
+}
 
 # Kubernetes
 module "kubeconfig" {

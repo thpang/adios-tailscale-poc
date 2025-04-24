@@ -11,7 +11,7 @@ output "kubeconfigs" {
   value       = module.kubeconfig.*.kube_config
 }
 
-output "irsa-ebs-csi" {
+output "ebs_csi_driver_role" {
   description = "IAM role for ebs-csi-controller Service Account"
-  value       = module.irsa-ebs-csi.*.iam_assumable_role_with_oidc
+  value       = module.ebs_csi_driver.*.ebs_csi_driver_role
 }
